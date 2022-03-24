@@ -1,0 +1,108 @@
+- hosts: localhost
+  connection: local
+  tasks:
+
+# The first task will create a key pair locally and then create a
+# KeyPair resource called CloudFormationKeyPair in AWS using the
+# public key that was created.
+
+  - name: "generate key pair"
+    openssh_keypair:
+      path: ~/.ssh/ansible_id_rsa
+      state: present
+  - name: "create key pair using key_material obtained using 'file' lookup plugin"
+    ec2_key:
+      name: CloudFormationKeyPair
+      key_material: "{{ lookup('file', '~/.ssh/ansible_id_rsa.pub') }}"
+      state: present
+
+# Once a KeyPair has been configured, a template which utilises that
+# key pair can be used. The Playbook we are creating needs access to
+# a template file called stack.yaml. This CloudFormation template
+# can be applied using Ansible with the following task.
+
+  - name: "create a simple stack"
+    cloudformation:
+      state: present
+      stack_name: test-stack
+      region: eu-west-2
+      template: stack.yaml
+
+# For Ansible to be able to connect to the machines it will need to
+# know which IP address or DNS name to connect to. A combination of
+# modules called cloudformation_info and ec2_instance_info will
+# allow you to get this information. First the instance_ids are
+# collected for the stack, then for those IDs the public_dns_name is
+# collected from each one and put in a list called ec2_instances.
+
+  - cloudformation_info:
+      stack_name: test-stack
+      stack_resources: true
+    register: output
+  - ec2_instance_info:
+      instance_ids: "{{ output['cloudformation']['test-stack']['stack_resource_list'] | json_query(query) }}"
+    vars:
+      query: "[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId"
+    register: ec2
+  - set_fact:
+      ec2_instances: "{{ ec2['instances'] | map(attribute='public_dns_name') | list }}"
+
+# This information can now be used to build an inventory in Ansible.
+# The list of instances (ec2_instances) can be looped through and
+# added as a host to the in-memory inventory.
+
+  - name: "build inventory"
+    add_host:
+      name: "{{ item }}"
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/ansible_id_rsa
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o ConnectTimeout=60'
+    with_items: "{{ ec2_instances }}"
+
+# The most common issue is when the stack has completed creating,
+# the instances are still not quite ready to be connected to, going
+# straight into some tasks trying to gather facts from these
+# instances will cause the setup to fail. However a playbook can be
+# made to wait until the instances are reachable by not gathering
+# facts until a connection can be established.
+
+- hosts: all
+  become: true
+  gather_facts: no
+  tasks:
+  - name: Wait 300 seconds, but only start checking after 60 seconds
+    wait_for_connection:
+      delay: 60
+      timeout: 300  
+  - name: "Gather facts for first time"
+    setup:
+
+# Next we will need to install Nginx to use as a reverse proxy as
+# well as Git to clone the repo containing the static website.
+
+  - name: "Install Dependencies"
+    apt:
+      name:
+      - nginx
+      - git
+      state: latest
+      update_cache: true
+  - name: "nginx configuration"
+    copy:
+      src: ./nginx.conf
+      dest: /etc/nginx/nginx.conf
+      owner: root
+      group: root
+      mode: 0644
+    register: nginx_config
+  - name: "reload nginx"
+    service:
+      name: nginx
+      state: reloaded
+    when: nginx_config.changed
+  - name: "static website"
+    git:
+      repo: "https://github.com/mrbilalshafiq/html"
+      dest: "/opt/html"
+      force: yes
+
