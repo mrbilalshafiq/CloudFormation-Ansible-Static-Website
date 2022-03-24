@@ -1,0 +1,42 @@
+# The Playbook I created needs access to a template file called
+# stack.yaml. Here is a template that creates an EC2 instance
+# running Ubuntu 20.04 LTS using the CloudFormationKeyPair
+
+Resources:
+  Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: CloudFormationKeyPair
+      ImageId: ami-0015a39e4b7c0966f
+      InstanceType: t2.micro
+      Tags:
+        - Key: "Name"
+          Value: "Example"
+      SecurityGroups:
+        - !Ref AllowSSH
+        - !Ref AllowHTTP
+
+# Next we will open port 22 to allow access using SSH.
+
+  AllowSSH:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access
+      SecurityGroupIngress:
+        IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+
+# Lastly we’ll open port 80 to make the website available by browser
+
+  AllowHTTP:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access
+      SecurityGroupIngress:
+        IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+
