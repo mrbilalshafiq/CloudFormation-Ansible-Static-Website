@@ -10,6 +10,7 @@
     openssh_keypair:
       path: ~/.ssh/ansible_id_rsa
       state: present
+      
   - name: "create key pair using key_material obtained using 'file' lookup plugin"
     ec2_key:
       name: CloudFormationKeyPair
@@ -39,11 +40,13 @@
       stack_name: test-stack
       stack_resources: true
     register: output
+    
   - ec2_instance_info:
       instance_ids: "{{ output['cloudformation']['test-stack']['stack_resource_list'] | json_query(query) }}"
     vars:
       query: "[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId"
     register: ec2
+    
   - set_fact:
       ec2_instances: "{{ ec2['instances'] | map(attribute='public_dns_name') | list }}"
 
@@ -74,6 +77,7 @@
     wait_for_connection:
       delay: 60
       timeout: 300  
+      
   - name: "Gather facts for first time"
     setup:
 
@@ -87,6 +91,7 @@
       - git
       state: latest
       update_cache: true
+      
   - name: "nginx configuration"
     copy:
       src: ./nginx.conf
@@ -95,11 +100,13 @@
       group: root
       mode: 0644
     register: nginx_config
+    
   - name: "reload nginx"
     service:
       name: nginx
       state: reloaded
     when: nginx_config.changed
+    
   - name: "static website"
     git:
       repo: "https://github.com/mrbilalshafiq/html"
