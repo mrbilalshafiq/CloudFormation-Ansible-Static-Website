@@ -7,7 +7,7 @@
 
 1. Clone the GitHub Repo
 
-        git clone https://github.com/mrbilalshafiq/CloudFormation-Ansible-Static-Website
+        git clone https://github.com/mrbilalshafiq/CloudFormation-Ansible-Static-Website && cd CloudFormation-Ansible-Static-Website
 
 2. Install AWSCLI, Ansible, Python3, & Pip3:
 
